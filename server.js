@@ -1,22 +1,27 @@
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const sqlite3 = require('sqlite3').verbose();
-const cors = require('cors');
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const sqlite3 = require("sqlite3").verbose();
+const cors = require("cors");
 
-const app = express();   // create app FIRST
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json({ limit: '100kb' }));
-app.use(express.static(__dirname));
+// Allow requests from your Vercel frontend
+app.use(cors({
+  origin: "https://mj-creations.vercel.app"
+}));
 
-const dataDir = path.join(__dirname, 'data');
+app.use(express.json({ limit: "100kb" }));
+
+// Create data folder automatically
+const dataDir = path.join(__dirname, "data");
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'leads.db');
+// Create database
+const dbPath = path.join(dataDir, "leads.db");
 const db = new sqlite3.Database(dbPath);
 
 db.serialize(() => {
@@ -37,20 +42,27 @@ db.serialize(() => {
   `);
 });
 
+// Helper functions
 function isValidEmail(value) {
-  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function normalizeText(value, maxLen) {
-  const text = (value || '').toString().trim();
+  const text = (value || "").toString().trim();
   return text.length > maxLen ? text.slice(0, maxLen) : text;
 }
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'mj-nxtgen-contact-api' });
+// Health check
+app.get("/", (req, res) => {
+  res.send("MJ NxtGen Backend API running");
 });
 
-app.post('/api/contact', (req, res) => {
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true });
+});
+
+// Contact form API
+app.post("/api/contact", (req, res) => {
 
   const gotcha = normalizeText(req.body._gotcha, 100);
   const name = normalizeText(req.body.name, 120);
@@ -62,22 +74,24 @@ app.post('/api/contact', (req, res) => {
   const clientTimezone = normalizeText(req.body.client_timezone, 100);
 
   const ipAddress = normalizeText(
-    (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')
-      .toString().split(',')[0], 100
+    (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
+      .toString().split(",")[0],
+    100
   );
 
-  const userAgent = normalizeText(req.headers['user-agent'], 500);
+  const userAgent = normalizeText(req.headers["user-agent"], 500);
 
+  // Honeypot spam protection
   if (gotcha) {
     return res.status(201).json({ ok: true, skipped: true });
   }
 
   if (!name || !phone || !email || !service || !details) {
-    return res.status(400).json({ ok: false, error: 'All fields are required.' });
+    return res.status(400).json({ ok: false, error: "All fields are required." });
   }
 
   if (!isValidEmail(email)) {
-    return res.status(400).json({ ok: false, error: 'Invalid email address.' });
+    return res.status(400).json({ ok: false, error: "Invalid email address." });
   }
 
   const sql = `
@@ -86,11 +100,12 @@ app.post('/api/contact', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.run(sql,
+  db.run(
+    sql,
     [name, phone, email, service, details, clientTime, clientTimezone, ipAddress, userAgent],
     function (err) {
       if (err) {
-        return res.status(500).json({ ok: false, error: 'Could not store lead.' });
+        return res.status(500).json({ ok: false, error: "Could not store lead." });
       }
 
       return res.status(201).json({ ok: true, id: this.lastID });
@@ -98,6 +113,7 @@ app.post('/api/contact', (req, res) => {
   );
 });
 
+// Admin dashboard API
 app.get("/api/leads", (req, res) => {
 
   const token = req.query.token;
@@ -118,10 +134,7 @@ app.get("/api/leads", (req, res) => {
 
 });
 
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
+// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
