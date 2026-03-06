@@ -1,0 +1,15 @@
+{
+  "name": "mj-nxtgen-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MJ NxtGen website with contact lead backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.21.2",
+    "sqlite3": "^5.0.2"
+  }
+}

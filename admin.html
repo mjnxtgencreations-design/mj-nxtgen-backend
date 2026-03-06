@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leads Dashboard | MJ NxtGen</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <main class="max-w-7xl mx-auto px-6 py-10">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-black">Leads Dashboard</h1>
+        <p class="text-gray-600 text-sm">View quote requests submitted from your website.</p>
+      </div>
+      <a href="index.html" class="text-blue-600 font-semibold hover:underline">Back to website</a>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+      <label for="token" class="text-xs font-bold uppercase text-gray-500">Admin Token</label>
+      <div class="flex gap-3 mt-2">
+        <input id="token" type="password" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Enter ADMIN_TOKEN">
+        <button id="loadBtn" class="bg-black text-white px-5 py-2 rounded-lg font-semibold">Load Leads</button>
+      </div>
+      <p id="status" class="text-sm mt-2 text-gray-600"></p>
+    </div>
+
+    <div class="overflow-auto bg-white border border-gray-200 rounded-xl">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-100 text-gray-700">
+          <tr>
+            <th class="text-left px-4 py-3">ID</th>
+            <th class="text-left px-4 py-3">Created (UTC)</th>
+            <th class="text-left px-4 py-3">Name</th>
+            <th class="text-left px-4 py-3">Phone</th>
+            <th class="text-left px-4 py-3">Email</th>
+            <th class="text-left px-4 py-3">Service</th>
+            <th class="text-left px-4 py-3">Details</th>
+            <th class="text-left px-4 py-3">Client Time</th>
+            <th class="text-left px-4 py-3">Timezone</th>
+            <th class="text-left px-4 py-3">IP</th>
+            <th class="text-left px-4 py-3">User Agent</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const loadBtn = document.getElementById('loadBtn');
+    const statusEl = document.getElementById('status');
+    const rowsEl = document.getElementById('rows');
+
+    function escapeHtml(text) {
+      return String(text || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    async function loadLeads() {
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Loading...';
+      statusEl.textContent = '';
+
+      try {
+        const response = await fetch("/api/leads?token=9901");
+
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'Failed to load leads.');
+        }
+
+        rowsEl.innerHTML = data.leads.map((lead) => `
+          <tr class="border-t border-gray-100 align-top">
+            <td class="px-4 py-3">${escapeHtml(lead.id)}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${escapeHtml(lead.created_at)}</td>
+            <td class="px-4 py-3">${escapeHtml(lead.name)}</td>
+            <td class="px-4 py-3">${escapeHtml(lead.phone)}</td>
+            <td class="px-4 py-3"><a class="text-blue-600 hover:underline" href="mailto:${escapeHtml(lead.email)}">${escapeHtml(lead.email)}</a></td>
+            <td class="px-4 py-3">${escapeHtml(lead.service)}</td>
+            <td class="px-4 py-3 min-w-[280px]">${escapeHtml(lead.details)}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${escapeHtml(lead.client_time)}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${escapeHtml(lead.client_timezone)}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${escapeHtml(lead.ip_address)}</td>
+            <td class="px-4 py-3 min-w-[260px]">${escapeHtml(lead.user_agent)}</td>
+          </tr>
+        `).join('');
+
+        statusEl.textContent = `Loaded ${data.leads.length} lead(s).`;
+        statusEl.className = 'text-sm mt-2 text-green-600';
+      } catch (error) {
+        statusEl.textContent = error.message;
+        statusEl.className = 'text-sm mt-2 text-red-600';
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Load Leads';
+      }
+    }
+
+    loadBtn.addEventListener('click', loadLeads);
+  </script>
+</body>
+</html>
+
