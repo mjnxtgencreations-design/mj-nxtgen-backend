@@ -2,14 +2,14 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors');
 
-const cors = require("cors");
+const app = express();   // create app FIRST
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'change-this-admin-token';
+app.use(express.json({ limit: '100kb' }));
+app.use(express.static(__dirname));
 
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
@@ -37,11 +37,8 @@ db.serialize(() => {
   `);
 });
 
-app.use(express.json({ limit: '100kb' }));
-app.use(express.static(__dirname));
-
 function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
 }
 
 function normalizeText(value, maxLen) {
@@ -54,6 +51,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.post('/api/contact', (req, res) => {
+
   const gotcha = normalizeText(req.body._gotcha, 100);
   const name = normalizeText(req.body.name, 120);
   const phone = normalizeText(req.body.phone, 40);
@@ -62,10 +60,14 @@ app.post('/api/contact', (req, res) => {
   const details = normalizeText(req.body.details, 4000);
   const clientTime = normalizeText(req.body.client_time, 100);
   const clientTimezone = normalizeText(req.body.client_timezone, 100);
-  const ipAddress = normalizeText((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0], 100);
+
+  const ipAddress = normalizeText(
+    (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')
+      .toString().split(',')[0], 100
+  );
+
   const userAgent = normalizeText(req.headers['user-agent'], 500);
 
-  // Honeypot trap: if bots fill this hidden field, accept without storing
   if (gotcha) {
     return res.status(201).json({ ok: true, skipped: true });
   }
@@ -79,30 +81,22 @@ app.post('/api/contact', (req, res) => {
   }
 
   const sql = `
-    INSERT INTO leads (name, phone, email, service, details, client_time, client_timezone, ip_address, user_agent)
+    INSERT INTO leads
+    (name, phone, email, service, details, client_time, client_timezone, ip_address, user_agent)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.run(sql, [name, phone, email, service, details, clientTime, clientTimezone, ipAddress, userAgent], function insertCallback(err) {
-    if (err) {
-      return res.status(500).json({ ok: false, error: 'Could not store lead.' });
+  db.run(sql,
+    [name, phone, email, service, details, clientTime, clientTimezone, ipAddress, userAgent],
+    function (err) {
+      if (err) {
+        return res.status(500).json({ ok: false, error: 'Could not store lead.' });
+      }
+
+      return res.status(201).json({ ok: true, id: this.lastID });
     }
-
-    return res.status(201).json({ ok: true, id: this.lastID });
-  });
+  );
 });
-
-function adminAuth(req, res, next) {
-  const authHeader = req.headers.authorization || '';
-  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const token = bearerToken || req.headers['x-admin-token'] || req.query.token || '';
-
-  if (!token || token !== ADMIN_TOKEN) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
-
-  return next();
-}
 
 app.get("/api/leads", (req, res) => {
 
@@ -113,11 +107,13 @@ app.get("/api/leads", (req, res) => {
   }
 
   db.all("SELECT * FROM leads ORDER BY id DESC", [], (err, rows) => {
+
     if (err) {
       return res.json({ ok: false, error: "Database error" });
     }
 
     res.json({ ok: true, leads: rows });
+
   });
 
 });
@@ -126,10 +122,6 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.get('/portal', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'portal.html'));
-});
-
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
